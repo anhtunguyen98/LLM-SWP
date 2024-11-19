@@ -1,3 +1,6 @@
+import copy
+import json
+
 class BertConfig:
 
     def __init__(
@@ -22,3 +25,15 @@ class BertConfig:
         self.hidden_dropout_prob = hidden_dropout_prob
         self.attention_probs_dropout_prob = attention_probs_dropout_prob
         self.max_position_embeddings = max_position_embeddings
+    
+    def to_dict(self):
+        output = copy.deepcopy(self.__dict__)
+        return output
+    
+    def save_pretrained(self,save_directory):
+
+        config_dict = self.to_dict()
+        
+        json_file_path = os.path.join(save_directory,'config.json')
+        with open(json_file_path, "w", encoding="utf-8") as writer:
+            writer.write(json.dumps(config_dict, indent=2, sort_keys=True) + "\n")

@@ -1,13 +1,15 @@
 import torch
 import torch.nn as nn
-from models.bert_layer import BertLayer, BertPooler
+from models.bert_layer import BertLayer, BertPooler, BertOnlyMLMHead
 from models.bert_embedding import BertEmbeddings
 from typing import List, Optional, Tuple, Union
-from models.bert_output import BertOutput
+from models.bert_output import BertOutput, MaskedLMOutput
+from transformers.modeling_utils import unwrap_model
+import os
 
 class BertModel(nn.Module):
 
-    def __init__(self, config):
+    def __init__(self, config, add_pooling_layer=False):
         super(BertModel, self).__init__()
 
         self.num_blocks = config.num_hidden_layers
@@ -16,7 +18,8 @@ class BertModel(nn.Module):
 
         self.embedding = BertEmbeddings(config)
         self.encoder = nn.ModuleList([BertLayer(config) for _ in range(self.num_blocks)])
-        self.pooler = BertPooler(config)
+        if add_pooling_layer:
+            self.pooler = BertPooler(config)
 
     def forward(self,
         input_ids: Optional[torch.Tensor] = None,
@@ -34,3 +37,48 @@ class BertModel(nn.Module):
             last_hidden_state=sequence_output,
             pooler_output=pooled_output
         )
+class BertForMaskedLM(nn.Module):
+    def __init__(self, config):
+        super().__init__(config)
+
+        self.bert = BertModel(config, add_pooling_layer=False)
+        self.cls = BertOnlyMLMHead(config)
+    
+    def save_pretrained(self,save_directory):
+
+        os.makedirs(save_directory, exist_ok=True)
+        model_to_save = unwrap_model(self)
+        model_to_save.config.save_pretrained(save_directory)
+
+        output_model_file = os.path.join(save_directory, 'pytorch_model.bin')
+        torch.save(model_to_save.state_dict(), output_model_file)    
+
+    def forward(
+        self,
+        input_ids: Optional[torch.Tensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.Tensor] = None,
+        labels: Optional[torch.Tensor] = None,
+    ) -> Union[Tuple[torch.Tensor], MaskedLMOutput]:
+
+        outputs = self.bert(
+            input_ids,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+        )
+
+        sequence_output = outputs.last_hidden_state
+        prediction_scores = self.cls(sequence_output)
+
+        masked_lm_loss = None
+        if labels is not None:
+            loss_fct = nn.CrossEntropyLoss() 
+            masked_lm_loss = loss_fct(prediction_scores.view(-1, self.config.vocab_size), labels.view(-1))
+
+
+        return MaskedLMOutput(
+            loss=masked_lm_loss,
+            logits=prediction_scores,
+            hidden_states=outputs.hidden_states,
+        )
+
