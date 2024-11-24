@@ -1,2 +1,5 @@
 __pycache__
 .idea
+checkpoints
+data/train.txt
+data/val.txt

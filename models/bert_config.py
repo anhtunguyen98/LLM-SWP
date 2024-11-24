@@ -1,5 +1,6 @@
 import copy
 import json
+import os
 
 class BertConfig:
 
@@ -25,14 +26,37 @@ class BertConfig:
         self.hidden_dropout_prob = hidden_dropout_prob
         self.attention_probs_dropout_prob = attention_probs_dropout_prob
         self.max_position_embeddings = max_position_embeddings
+        self.classifier_dropout = classifier_dropout
+        self.pad_token_id = pad_token_id
     
     def to_dict(self):
         output = copy.deepcopy(self.__dict__)
         return output
     
+    def to_json_string(self):
+        config_dict = self.to_dict()
+        return json.dumps(config_dict, indent=2, sort_keys=True) + "\n"
+
+    def __repr__(self):
+        return self.to_json_string()
+
+    @classmethod
+    def from_pretrained(cls,pretrained_model_name_or_path):
+        config_file_path = os.path.join(pretrained_model_name_or_path,'config.json')
+        with open(config_file_path, "r", encoding="utf-8") as reader:
+            text = reader.read()
+        config_dict = json.loads(text)
+        config = cls(**config_dict)
+
+        return config
+
+
+
+    
     def save_pretrained(self,save_directory):
 
         config_dict = self.to_dict()
+        os.makedirs(save_directory, exist_ok=True)
         
         json_file_path = os.path.join(save_directory,'config.json')
         with open(json_file_path, "w", encoding="utf-8") as writer:

@@ -18,5 +18,5 @@ class MaskedLMOutput:
                 hidden_states: Optional[Tuple[torch.FloatTensor, ...]] = None):
                 
         self.loss = loss
-        self.logits = poolerlogits_output
+        self.logits = logits
         self.hidden_states = hidden_states
