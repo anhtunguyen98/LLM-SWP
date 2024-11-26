@@ -71,3 +71,17 @@ class BertPooler(nn.Module):
         pooled_output = self.dense(first_token_tensor)
         pooled_output = self.activation(pooled_output)
         return pooled_output
+
+class BertOnlyMLMHead(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.predictions = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+        self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=1e-6)
+
+    def forward(self, sequence_output: torch.Tensor) -> torch.Tensor:
+        sequence_output = self.dense(sequence_output)
+        sequence_output = F.gelu(sequence_output)
+        sequence_output = self.LayerNorm(sequence_output)
+        prediction_scores = self.predictions(sequence_output)
+        return prediction_scores
