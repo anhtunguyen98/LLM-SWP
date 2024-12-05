@@ -4,19 +4,19 @@
 TOKENIZER_PATH='assets/tokenizer.json'
 TRAIN_FILE='data/train.txt'
 VALIDATION_FILE='data/val.txt'
-MAX_SEQ_LENGTH=256
+MAX_SEQ_LENGTH=384
 PREPROCESSING_NUM_WORKERS=20
 MLM_PROBABILITY=0.15
 WARMUP_RATIO=0.1
 LEARNING_RATE=5e-5
-PER_DEVICE_TRAIN_BATCH_SIZE=32
-PER_DEVICE_EVAL_BATCH_SIZE=32
+PER_DEVICE_TRAIN_BATCH_SIZE=64
+PER_DEVICE_EVAL_BATCH_SIZE=64
 NUM_TRAIN_EPOCHS=5
 GRADIENT_ACCUMULATION_STEPS=1
 OUTPUT_DIR='checkpoints/'
 LOGGING_STEPS=100
-EVAL_STEPS=200
-SAVE_STEPS=200
+EVAL_STEPS=20000
+SAVE_STEPS=20000
 
 # Execute the Python script with the specified arguments
 python mlm.py \
@@ -36,3 +36,4 @@ python mlm.py \
   --logging_steps "$LOGGING_STEPS" \
   --eval_steps "$EVAL_STEPS" \
   --save_steps "$SAVE_STEPS" \
+  --resume_from_checkpoint /home/ubuntu/tuna/saarland/LLM-SWP/checkpoints/checkpoint-220000 \

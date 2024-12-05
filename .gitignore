@@ -3,3 +3,4 @@ __pycache__
 checkpoints
 data/train.txt
 data/val.txt
+data

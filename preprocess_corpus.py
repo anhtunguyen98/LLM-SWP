@@ -56,27 +56,27 @@ def process_document(example):
 # Main processing function
 def main():
     # Create a pool of workers
-    dataset_medwiki = load_dataset('VOD-LM/medwiki') 
-    # dataset_pubmed = load_dataset('casinca/PUBMED_title_abstracts_2019_baseline')  
-    with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
-        # Use tqdm to show progress
-        results1 = list(tqdm(pool.imap(process_document, dataset_medwiki['train']), total=len(dataset_medwiki['train']), desc='Processing Documents'))
-
+    # dataset_medwiki = load_dataset('VOD-LM/medwiki') 
+    dataset_pubmed = load_dataset('casinca/PUBMED_title_abstracts_2019_baseline')  
     # with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
     #     # Use tqdm to show progress
-    #     results2 = list(tqdm(pool.imap(process_document, dataset_pubmed['train']), total=len(dataset_pubmed['train']), desc='Processing Documents'))
+    #     results1 = list(tqdm(pool.imap(process_document, dataset_medwiki['train']), total=len(dataset_medwiki['train']), desc='Processing Documents'))
+
+    with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+        # Use tqdm to show progress
+        results2 = list(tqdm(pool.imap(process_document, dataset_pubmed['train']), total=len(dataset_pubmed['train']), desc='Processing Documents'))
 
     # Flatten the list of results
-    new_segments1 = [segment for sublist in results1 for segment in sublist]
-    # new_segments2 = [segment for sublist in results2 for segment in sublist]
-    print(len(new_segments1))
+    # new_segments1 = [segment for sublist in results1 for segment in sublist]
+    new_segments2 = [segment for sublist in results2 for segment in sublist]
+    print(len(new_segments2))
 
     # # Save as a plain text file
-    with open('data/train.txt', 'w', encoding='utf-8') as txt_file:
-        txt_file.write('\n'.join(new_segments1[:-5000]))
+    with open('data/train_pubmed.txt', 'w', encoding='utf-8') as txt_file:
+        txt_file.write('\n'.join(new_segments2[:-5000]))
 
-    with open('data/val.txt', 'w', encoding='utf-8') as txt_file:
-        txt_file.write('\n'.join(new_segments1[-5000:]))
+    # with open('data/val.txt', 'w', encoding='utf-8') as txt_file:
+    #     txt_file.write('\n'.join(new_segments1[-5000:]))
 
 if __name__ == "__main__":
     main()
