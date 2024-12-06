@@ -28,6 +28,7 @@ class BertConfig:
         self.max_position_embeddings = max_position_embeddings
         self.classifier_dropout = classifier_dropout
         self.pad_token_id = pad_token_id
+        self.num_labels = None
     
     def to_dict(self):
         output = copy.deepcopy(self.__dict__)

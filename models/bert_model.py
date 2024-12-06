@@ -16,9 +16,11 @@ class BaseModel(nn.Module):
     config_class = None  # This should be defined in subclasses
 
     @classmethod
-    def from_pretrained(cls, pretrained_model_name_or_path):
+    def from_pretrained(cls, pretrained_model_name_or_path, num_labels=None):
         """Load a pre-trained model from a specified path."""
         config = cls.config_class.from_pretrained(pretrained_model_name_or_path)
+        if num_labels:
+            config.num_labels = num_labels
         model = cls(config)
 
         checkpoint_path = os.path.join(pretrained_model_name_or_path, 'pytorch_model.bin')
@@ -108,3 +110,57 @@ class BertForMaskedLM(BaseModel):
             logits=prediction_scores,
             hidden_states=outputs.hidden_states,
         ) if return_dict else (masked_lm_loss, prediction_scores, outputs.last_hidden_state)
+
+
+class BertForSequenceClassification(BaseModel):
+
+    config_class = BertConfig
+
+    def __init__(self, config):
+        super(BertForSequenceClassification, self).__init__()
+        self.num_labels = config.num_labels
+        self.config = config
+
+        self.bert = BertModel(config, add_pooling_layer=False)
+        classifier_dropout = (
+            config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
+        )
+        self.dropout = nn.Dropout(classifier_dropout)
+        
+        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
+
+    def forward(
+        self,
+        input_ids: Optional[torch.Tensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.Tensor] = None,
+        labels: Optional[torch.Tensor] = None,
+        return_dict: Optional[bool] = None,
+    ) -> Union[Tuple[torch.Tensor], MaskedLMOutput]:
+        r"""
+        labels (`torch.LongTensor` of shape `(batch_size,)`, *optional*):
+            Labels for computing the sequence classification/regression loss. Indices should be in `[0, ...,
+            config.num_labels - 1]`. If `config.num_labels == 1` a regression loss is computed (Mean-Square loss), If
+            `config.num_labels > 1` a classification loss is computed (Cross-Entropy).
+        """
+
+        outputs = self.bert(input_ids, attention_mask=attention_mask, position_ids=position_ids)
+
+        pooled_output = outputs.last_hidden_state[:,0,:]
+
+        pooled_output = self.dropout(pooled_output)
+        logits = self.classifier(pooled_output)
+
+        loss = None
+        if labels is not None:
+            loss_fct = nn.CrossEntropyLoss()
+            loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+        if not return_dict:
+            output = (logits, pooled_output)
+            return ((loss,) + output) if loss is not None else output
+
+        return MaskedLMOutput(
+            loss=loss,
+            logits=logits,
+            hidden_states=outputs.hidden_states,
+        )

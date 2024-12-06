@@ -4,3 +4,6 @@ checkpoints
 data/train.txt
 data/val.txt
 data
+logs/
+wandb
+classification_checkpoint/
