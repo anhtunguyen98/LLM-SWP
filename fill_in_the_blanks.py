@@ -84,7 +84,7 @@ if __name__ == '__main__':
     val_dataset = val_test_split['train']
     test_dataset = val_test_split['test']
 
-    model = BertForMaskedLM.from_pretrained(model_name_or_path, num_labels=5)
+    model = BertForMaskedLM.from_pretrained(model_name_or_path)
 
     # frozen bert encoder
     for param in model.bert.parameters():
@@ -114,5 +114,5 @@ if __name__ == '__main__':
         eval_dataset=val_dataset,  # evaluation dataset
         compute_metrics=compute_metrics,  # the callback that computes metrics of interest
     )
-    trainer.train()
+    # trainer.train()
     print(trainer.evaluate(eval_dataset=test_dataset))

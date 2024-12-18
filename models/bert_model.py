@@ -196,6 +196,7 @@ class BertForMultipleChoice(BaseModel):
         # return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         num_choices = input_ids.shape[1] if input_ids is not None else inputs_embeds.shape[1]
 
+
         input_ids = input_ids.view(-1, input_ids.size(-1)) if input_ids is not None else None
         attention_mask = attention_mask.view(-1, attention_mask.size(-1)) if attention_mask is not None else None
         position_ids = position_ids.view(-1, position_ids.size(-1)) if position_ids is not None else None
@@ -220,7 +221,8 @@ class BertForMultipleChoice(BaseModel):
         if not return_dict:
             output = (reshaped_logits, pooled_output)
             return ((loss,) + output) if loss is not None else output
-
+        
+        
         return MaskedLMOutput(
             loss=loss,
             logits=reshaped_logits,

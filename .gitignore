@@ -7,3 +7,4 @@ data
 logs/
 wandb
 classification_checkpoint/
+mcq_checkpoint/
