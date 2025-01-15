@@ -228,3 +228,104 @@ class BertForMultipleChoice(BaseModel):
             logits=reshaped_logits,
             hidden_states=outputs.hidden_states,
         )
+
+class BertForNextSentencePrediction(BaseModel):
+    config_class = BertConfig  
+
+    def __init__(self, config):
+        super(BertForNextSentencePrediction, self).__init__()
+        self.config = config
+
+        self.bert = BertModel(config)
+        self.cls = BertOnlyNSPHead(config)
+
+    def forward(
+        self,
+        input_ids: Optional[torch.Tensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        token_type_ids: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.Tensor] = None,
+        next_sentence_label: Optional[torch.Tensor] = None,
+        return_dict: Optional[bool] = None,
+    ) :
+
+
+
+        labels = next_sentence_label
+
+        outputs = self.bert(
+            input_ids,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+        )
+
+        pooled_output = outputs.last_hidden_state[:, 0, :]
+
+        seq_relationship_scores = self.cls(pooled_output)
+
+        next_sentence_loss = None
+        if labels is not None:
+            loss_fct = CrossEntropyLoss()
+            next_sentence_loss = loss_fct(seq_relationship_scores.view(-1, 2), labels.view(-1))
+
+        if not return_dict:
+            output = (seq_relationship_scores,pooled_output)
+            return ((next_sentence_loss,) + output) if next_sentence_loss is not None else output
+
+        return MaskedLMOutput(
+            loss=next_sentence_loss,
+            logits=seq_relationship_scores,
+            hidden_states=outputs.hidden_states,
+        )
+        
+class BertForTokenClassification(BaseModel):
+
+    config_class = BertConfig
+
+    def __init__(self, config):
+        super(BertForTokenClassification, self).__init__()
+        self.num_labels = config.num_labels
+        self.config = config
+
+        self.bert = BertModel(config, add_pooling_layer=False)
+        classifier_dropout = (
+            config.classifier_dropout if config.classifier_dropout is not None else config.hidden_dropout_prob
+        )
+        self.dropout = nn.Dropout(classifier_dropout)
+        
+        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
+        
+    def forward(
+            self,
+            input_ids: Optional[torch.Tensor] = None,
+            attention_mask: Optional[torch.Tensor] = None,
+            position_ids: Optional[torch.Tensor] = None,
+            labels: Optional[torch.Tensor] = None,
+            return_dict: Optional[bool] = None,
+    ) -> Union[Tuple[torch.Tensor], MaskedLMOutput]:
+        r"""
+        labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
+            Labels for computing the token classification loss. Indices should be in `[0, ..., config.num_labels - 1]`.
+        """
+        outputs = self.bert(input_ids, attention_mask=attention_mask, position_ids=position_ids)
+        
+        sequence_output = outputs.last_hidden_state
+
+        sequence_output = self.dropout(sequence_output)
+        logits = self.classifier(sequence_output)
+
+        loss = None
+        if labels is not None:
+            loss_fct = CrossEntropyLoss()
+            loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+
+        if not return_dict:
+            output = (logits, sequence_output)
+            return ((loss,) + output) if loss is not None else output
+
+        return MaskedLMOutput(
+            loss=loss,
+            logits=logits,
+            hidden_states=outputs.hidden_states,
+        )
+
