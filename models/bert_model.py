@@ -8,7 +8,7 @@ from safetensors.torch import load_file as safe_load_file
 from models.bert_config import BertConfig
 from typing import List, Optional, Tuple, Union
 from models.bert_output import BertOutput, MaskedLMOutput
-from models.bert_layer import BertLayer, BertPooler, BertOnlyMLMHead
+from models.bert_layer import BertLayer, BertPooler, BertOnlyMLMHead, BertOnlyNSPHead
 from models.bert_embedding import BertEmbeddings
 
 class BaseModel(nn.Module):
@@ -228,3 +228,53 @@ class BertForMultipleChoice(BaseModel):
             logits=reshaped_logits,
             hidden_states=outputs.hidden_states,
         )
+
+class BertForNextSentencePrediction(BaseModel):
+    config_class = BertConfig  
+
+    def __init__(self, config):
+        super(BertForNextSentencePrediction, self).__init__()
+        self.config = config
+
+        self.bert = BertModel(config)
+        self.cls = BertOnlyNSPHead(config)
+
+    def forward(
+        self,
+        input_ids: Optional[torch.Tensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        token_type_ids: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.Tensor] = None,
+        next_sentence_label: Optional[torch.Tensor] = None,
+        return_dict: Optional[bool] = None,
+    ) :
+
+
+
+        labels = next_sentence_label
+
+        outputs = self.bert(
+            input_ids,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+        )
+
+        pooled_output = outputs.last_hidden_state[:, 0, :]
+
+        seq_relationship_scores = self.cls(pooled_output)
+
+        next_sentence_loss = None
+        if labels is not None:
+            loss_fct = CrossEntropyLoss()
+            next_sentence_loss = loss_fct(seq_relationship_scores.view(-1, 2), labels.view(-1))
+
+        if not return_dict:
+            output = (seq_relationship_scores,pooled_output)
+            return ((next_sentence_loss,) + output) if next_sentence_loss is not None else output
+
+        return MaskedLMOutput(
+            loss=next_sentence_loss,
+            logits=seq_relationship_scores,
+            hidden_states=outputs.hidden_states,
+        )
+

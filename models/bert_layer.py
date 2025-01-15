@@ -85,3 +85,12 @@ class BertOnlyMLMHead(nn.Module):
         sequence_output = self.LayerNorm(sequence_output)
         prediction_scores = self.predictions(sequence_output)
         return prediction_scores
+
+class BertOnlyNSPHead(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.seq_relationship = nn.Linear(config.hidden_size, 2)
+
+    def forward(self, pooled_output):
+        seq_relationship_score = self.seq_relationship(pooled_output)
+        return seq_relationship_score

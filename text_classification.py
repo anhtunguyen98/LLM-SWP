@@ -6,7 +6,7 @@ from datasets import load_dataset
 
 
 max_length = 512
-model_name_or_path = 'checkpoints/checkpoint-220000'
+model_name_or_path = 'checkpoints_nsp/checkpoint-100000'
 tokenizer = PreTrainedTokenizerFast.from_pretrained(model_name_or_path)
 
 
@@ -62,13 +62,13 @@ if __name__ == '__main__':
     
 
     training_args = TrainingArguments(
-        output_dir='./classification_checkpoint',          # output directory
+        output_dir='./classification_checkpoint_nsp',          # output directory
         num_train_epochs=10,               # total number of training epochs
         per_device_train_batch_size=64,  # batch size per device during training
         per_device_eval_batch_size=64,   # batch size for evaluation
         warmup_steps=0,                # number of warmup steps for learning rate scheduler
         weight_decay=0.01,               # strength of weight decay
-        logging_dir='./classification_checkpoint/runs',
+        logging_dir='./classification_checkpoint_nsp/runs',
         report_to='tensorboard',            # directory for storing logs
         load_best_model_at_end=True,     # load the best model when finished training (default metric is loss)
         metric_for_best_model='f1',
