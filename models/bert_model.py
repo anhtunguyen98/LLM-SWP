@@ -277,6 +277,60 @@ class BertForNextSentencePrediction(BaseModel):
             logits=seq_relationship_scores,
             hidden_states=outputs.hidden_states,
         )
+
+class BertForNSPAndMLM(BaseModel):
+    config_class = BertConfig  
+
+    def __init__(self, config):
+        super(BertForNSPAndMLM, self).__init__()
+        self.config = config
+
+        self.bert = BertModel(config)
+        self.nsp_cls = BertOnlyNSPHead(config)
+        self.mlm_cls = BertOnlyMLMHead(config)
+
+    def forward(
+        self,
+        input_ids: Optional[torch.Tensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        token_type_ids: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.Tensor] = None,
+        next_sentence_label: Optional[torch.Tensor] = None,
+        mlm_label: Optional[torch.Tensor] = None,
+        return_dict: Optional[bool] = None,
+    ) :
+
+
+        outputs = self.bert(
+            input_ids,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+        )
+
+        sequence_output = outputs.last_hidden_state
+        pooled_output = sequence_output[:, 0, :]
+
+
+        prediction_scores = self.mlm_cls(sequence_output)
+        seq_relationship_scores = self.nsp_cls(pooled_output)
+        total_loss = None
+
+        if mlm_label is not None and next_sentence_label is not None:
+            loss_fct = nn.CrossEntropyLoss()
+            masked_lm_loss = loss_fct(prediction_scores.view(-1, self.config.vocab_size), mlm_label.view(-1))
+            next_sentence_loss = loss_fct(seq_relationship_scores.view(-1, 2), next_sentence_label.view(-1))
+
+            total_loss = masked_lm_loss + next_sentence_loss
+
+        if not return_dict:
+            output = (seq_relationship_scores,prediction_scores)
+            return ((total_loss,) + output) if total_loss is not None else output
+
+        return MaskedLMOutput(
+            loss=total_loss,
+            logits=seq_relationship_scores,
+            hidden_states=prediction_scores
+        )
         
 class BertForTokenClassification(BaseModel):
 

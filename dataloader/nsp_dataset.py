@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Dict, Any, Optional, Union
+from typing import List, Dict, Any, Optional, Union, Tuple
 from transformers import PreTrainedTokenizerBase, PreTrainedTokenizer, logging
 from transformers.utils import PaddingStrategy
 import os
@@ -264,3 +264,101 @@ class DataCollatorWithPaddingAndTracating:
         }
 
         return batch
+
+@dataclass
+class DataCollatorForMLMandNSP:
+
+    tokenizer: PreTrainedTokenizerBase
+    mlm: bool = True
+    mlm_probability: float = 0.15
+    mask_replace_prob: float = 0.8
+    random_replace_prob: float = 0.1
+    pad_to_multiple_of: Optional[int] = None
+    return_tensors: str = "pt"
+    padding: Union[bool, str, PaddingStrategy] = True
+    max_length: Optional[int] = None
+
+    def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, Any]:
+        # Extract input_ids, token_type_ids, and next_sentence_labels
+        input_ids = [feature['input_ids'] for feature in features]
+        token_type_ids = [feature['token_type_ids'] for feature in features]
+        next_sentence_labels = [feature['next_sentence_label'] for feature in features]
+
+        # Determine the maximum length for padding
+        if self.max_length is None:
+            max_length = max(len(ids) for ids in input_ids)
+        else:
+            max_length = self.max_length
+
+        # Pad input_ids
+        padded_input_ids = torch.stack([
+            torch.cat((torch.tensor(ids), torch.zeros(max_length - len(ids), dtype=torch.long))) if len(ids) < max_length else torch.tensor(ids[:max_length], dtype=torch.long)
+            for ids in input_ids
+        ])
+
+        # Pad token_type_ids
+        padded_token_type_ids = torch.stack([
+            torch.cat((torch.tensor(tids), torch.zeros(max_length - len(tids), dtype=torch.long))) if len(tids) < max_length else torch.tensor(tids[:max_length], dtype=torch.long)
+            for tids in token_type_ids
+        ])
+
+        # Create the final batch dictionary
+        padded_input_ids, mlm_label = self.torch_mask_tokens(
+                        padded_input_ids, special_tokens_mask=None
+        )
+        attention_mask = (padded_input_ids != 0).long()
+        batch = {
+            'input_ids': padded_input_ids,
+            'attention_mask': attention_mask,
+            'token_type_ids': padded_token_type_ids,
+            'next_sentence_label': torch.tensor(next_sentence_labels, dtype=torch.long),
+            'mlm_label': mlm_label
+        }
+
+        return batch
+
+    def torch_mask_tokens(self, inputs: Any, special_tokens_mask: Optional[Any] = None) -> Tuple[Any, Any]:
+        """
+        Prepare masked tokens inputs/labels for masked language modeling: 80% MASK, 10% random, 10% original.
+        """
+        import torch
+
+        labels = inputs.clone()
+        # We sample a few tokens in each sequence for MLM training (with probability `self.mlm_probability`)
+        probability_matrix = torch.full(labels.shape, self.mlm_probability)
+        if special_tokens_mask is None:
+            special_tokens_mask = [
+                self.tokenizer.get_special_tokens_mask(val, already_has_special_tokens=True) for val in labels.tolist()
+            ]
+            special_tokens_mask = torch.tensor(special_tokens_mask, dtype=torch.bool)
+        else:
+            special_tokens_mask = special_tokens_mask.bool()
+
+        probability_matrix.masked_fill_(special_tokens_mask, value=0.0)
+        masked_indices = torch.bernoulli(probability_matrix).bool()
+        labels[~masked_indices] = -100  # We only compute loss on masked tokens
+
+        # mask_replace_prob% of the time, we replace masked input tokens with tokenizer.mask_token ([MASK])
+        indices_replaced = torch.bernoulli(torch.full(labels.shape, self.mask_replace_prob)).bool() & masked_indices
+        inputs[indices_replaced] = self.tokenizer.convert_tokens_to_ids(self.tokenizer.mask_token)
+
+        if self.mask_replace_prob == 1 or self.random_replace_prob == 0:
+            return inputs, labels
+
+        remaining_prob = 1 - self.mask_replace_prob
+        # scaling the random_replace_prob to the remaining probability for example if
+        # mask_replace_prob = 0.8 and random_replace_prob = 0.1,
+        # then random_replace_prob_scaled = 0.1 / 0.2 = 0.5
+        random_replace_prob_scaled = self.random_replace_prob / remaining_prob
+
+        # random_replace_prob% of the time, we replace masked input tokens with random word
+        indices_random = (
+            torch.bernoulli(torch.full(labels.shape, random_replace_prob_scaled)).bool()
+            & masked_indices
+            & ~indices_replaced
+        )
+        random_words = torch.randint(len(self.tokenizer), labels.shape, dtype=torch.long)
+        inputs[indices_random] = random_words[indices_random]
+
+        # The rest of the time ((1-random_replace_prob-mask_replace_prob)% of the time) we keep the masked input tokens unchanged
+        return inputs, labels
