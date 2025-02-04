@@ -302,9 +302,21 @@ class DataCollatorForMLMandNSP:
             for tids in token_type_ids
         ])
 
+        mask_labels = []
+        for e in padded_input_ids:
+            ref_tokens = []
+            for id in e:
+                id = id.numpy().tolist()
+                token = self.tokenizer._convert_id_to_token(id)
+                ref_tokens.append(token)
+            mask_labels.append(self._whole_word_mask(ref_tokens))
+
+        mask_labels = [torch.tensor(e, dtype=torch.long) for e in mask_labels]
+        mask_labels = torch.stack(mask_labels, dim=0)
+
         # Create the final batch dictionary
         padded_input_ids, mlm_label = self.torch_mask_tokens(
-                        padded_input_ids, special_tokens_mask=None
+                        padded_input_ids, special_tokens_mask=mask_labels
         )
         attention_mask = (padded_input_ids != 0).long()
         batch = {
@@ -362,3 +374,44 @@ class DataCollatorForMLMandNSP:
 
         # The rest of the time ((1-random_replace_prob-mask_replace_prob)% of the time) we keep the masked input tokens unchanged
         return inputs, labels
+
+    def _whole_word_mask(self, input_tokens: List[str], max_predictions=512):
+        """
+        Get 0/1 labels for masked tokens with whole word mask proxy
+        """
+        cand_indexes = []
+        for i, token in enumerate(input_tokens):
+            if token == "[CLS]" or token == "[SEP]":
+                continue
+
+            if len(cand_indexes) >= 1 and token.startswith("##"):
+                cand_indexes[-1].append(i)
+            else:
+                cand_indexes.append([i])
+
+        random.shuffle(cand_indexes)
+        num_to_predict = min(max_predictions, max(1, int(round(len(input_tokens) * self.mlm_probability))))
+        masked_lms = []
+        covered_indexes = set()
+        for index_set in cand_indexes:
+            if len(masked_lms) >= num_to_predict:
+                break
+            # If adding a whole-word mask would exceed the maximum number of
+            # predictions, then just skip this candidate.
+            if len(masked_lms) + len(index_set) > num_to_predict:
+                continue
+            is_any_index_covered = False
+            for index in index_set:
+                if index in covered_indexes:
+                    is_any_index_covered = True
+                    break
+            if is_any_index_covered:
+                continue
+            for index in index_set:
+                covered_indexes.add(index)
+                masked_lms.append(index)
+
+        if len(covered_indexes) != len(masked_lms):
+            raise ValueError("Length of covered_indexes is not equal to length of masked_lms.")
+        mask_labels = [1 if i in covered_indexes else 0 for i in range(len(input_tokens))]
+        return mask_labels
