@@ -1,6 +1,6 @@
 # MLM Training Script
 
-This repository contains a script for training a masked language model (MLM) using a provided dataset. The training script leverages the `mlm.py` Python file and can be executed using the included Bash script.
+This repository contains a script for training a BERT using a provided dataset.
 
 ## Prerequisites
 
@@ -14,6 +14,8 @@ You can install the required libraries with:
 ```bash
 pip install -r requirements.txt
 ```
+# Download the dataset on this link 
+https://huggingface.co/datasets/anhtunguyen98/LLM-SWP
 # File Structure
 ```
 .
